@@ -17,7 +17,6 @@ dependencies {
     // this is the line that solves the missing /META-INF/BenchmarkList error
     jmhAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.35'
 
-    implementation 'org.jetbrains:annotations:23.0.0'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.0'
 }

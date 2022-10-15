@@ -11,6 +11,9 @@ public final class IntStack {
         ints[size++] = n;
     }
 
+    public int peek() {
+        return ints[size - 1];
+    }
     public int pop() {
         return ints[--size];
     }
