@@ -1,16 +1,11 @@
 package src.symbol;
 
-import src.Handler;
-import src.Script;
+import src.script.Script;
 
 import java.io.IOException;
 
-import static nullity.Nullity.using;
-
 public final class Reference extends AbstractSymbol {
     public void assign(AbstractSymbol reference) {
-        using(reference);
-
         this.reference = reference;
     }
 
@@ -19,17 +14,7 @@ public final class Reference extends AbstractSymbol {
         return reference.accept(input);
     }
 
-    @Override
-    public String name() {
-        return reference.name();
-    }
-
-    @Override
-    public Handler<?> handler() {
-        return reference.handler();
-    }
-
-    protected Reference() {
+    Reference() {
     }
 
     private AbstractSymbol reference;

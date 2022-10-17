@@ -1,5 +1,6 @@
 package src;
 
+import src.script.Script;
 import src.symbol.AbstractSymbol;
 import src.symbol.RecursiveUnion;
 import src.symbol.Reference;

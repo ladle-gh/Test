@@ -1,25 +1,20 @@
 package src.symbol;
 
-import src.Handler;
-import src.Script;
+import src.handler.Handler;
+import src.script.Script;
 
 import java.io.IOException;
 
-import static nullity.Nullity.using;
-import static nullity.Nullity.usingMembers;
-
 public final class RecursiveUnion extends Symbol {
-    RecursiveUnion(String name, Handler<?> handler, AbstractSymbol[] symbols) {
+    RecursiveUnion(String name, Handler handler, AbstractSymbol[] symbols) {
         super(name, handler);
-        using(symbols);
-        usingMembers(symbols);
 
         this.symbols = symbols;
         decomposed = new boolean[symbols.length - 1];
     }
 
     public Symbol decompose(int which) {
-        return new Symbol(name(), handler()) {
+        return new Symbol(name, handler) {
             @Override
             public int accept(Script input) throws IOException {
                 decomposed[which] = true;
@@ -43,11 +38,11 @@ public final class RecursiveUnion extends Symbol {
                 continue;
             result = symbols[i].accept(input);
             if (result != NO_MATCH) {
-                input.match(this, 1);
+                input.match(this, 1, i);
                 return result;
             }
         }
-        input.revert();
+        input.fail();
         return NO_MATCH;
     }
 
