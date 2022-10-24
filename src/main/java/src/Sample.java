@@ -1,45 +1,60 @@
 package src;
 
 import src.script.Script;
-import src.symbol.AbstractSymbol;
-import src.symbol.RecursiveUnion;
-import src.symbol.Reference;
+import src.symbol.*;
 
 import java.io.*;
 import java.net.URL;
 
-import static src.symbol.AbstractSymbol.*;
-
 public class Sample {
-    private static final Reference
-        ref_modification = reference(),
-        ref_operation = reference(),
-        ref_expression = reference();
+    private static final Proxy
+        modification_proxy = new Proxy(),
+        operation_proxy = new Proxy(),
+        expression_proxy = new Proxy();
 
     public static final AbstractSymbol
-        ign_none = literal(c -> false),
+        /*
+            // :: []?
+            nothing = new PredicateLiteral("nothing", null, c -> false);
 
-        all = literal(c -> true),
-        whitespace = literal(c -> switch (c) {
+            // :: [-]
+            anything = new PredicateLiteral("anything", null, c -> true);
+         */
+
+        // :: [ \t\n\013\f\r]
+        whitespace = new PredicateLiteral("whitespace", null, c -> switch (c) {
             case ' ', '\t', '\n', '\013', '\f', '\r' -> true;
             default -> false;
         }),
-        comment = group(ign_none, literal('#'), all, literal('\n')),
-        ign_space = union(whitespace, comment).any(ign_none),
 
-        horizontalSpace = literal(c -> switch (c) {
+        // ::<nothing> '#' anything '\n'
+        comment = new Grouping("comment", null, Nothing.INSTANCE,
+            new CharLiteral(null, null, '#'),
+            Anything.INSTANCE,
+            new CharLiteral(null, null, '\n')
+        ),
+
+        // :: (whitespace | comment)*<nothing>
+        multiLine = new Wildcard("multiLine", null, Nothing.INSTANCE, new Union(null, null, whitespace, comment)),
+
+        // :: [ \t\013\f]*<nothing>
+        inline = new Wildcard("inline", null, Nothing.INSTANCE,
+                                        new PredicateLiteral(null, null, c -> switch (c) {
             case ' ', '\t', '\013', '\f' -> true;
             default -> false;
-        }),
+        })),
 
-        identifierStart = literal(c -> switch (c) { // [a-zA-Z]
+        // :: [a-zA-Z]
+        identifierStart = new PredicateLiteral("identifierStart", null, c -> switch (c) {
             case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
                  'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
                  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
                  'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z' -> true;
             default -> false;
         }),
-        identifierPart = literal(c -> switch (c) {  // [a-zA-Z0-9]
+
+        // :: [a-zA-Z0-9]
+        identifierPart = new PredicateLiteral("identifierPart", null, c -> switch (c) {
             case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
                  'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
                  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
@@ -47,75 +62,202 @@ public class Sample {
                  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' -> true;
             default -> false;
         }),
-        identifier = group(ign_none, identifierStart, identifierPart.any(ign_none)),
 
-        charEscape = literal(c -> switch (c) {      // [t'nr\\f]
+        // ::<nothing> identifierStart identifierPart*<nothing>
+        identifier = new Grouping("identifier", null, Nothing.INSTANCE, identifierStart,
+                                  new Wildcard(null, null, Nothing.INSTANCE, identifierPart)),
+
+        // :: [t'nr\\f]
+        charEscape = new PredicateLiteral("charEscape", null, c -> switch (c) {
             case 't', '\'', 'n', 'r', '\\', 'f' -> true;
             default -> false;
         }),
-        octalDigit = literal(c -> switch (c) {      // [0-7]
+
+        // :: [0-7]
+        octalDigit = new PredicateLiteral("octalDigit", null, c -> switch (c) {
             case '0', '1', '2', '3', '4', '5', '6', '7' -> true;
             default -> false;
         }),
-        hexDigit = literal(c -> switch (c) {        // [0-9a-fA-F]
+
+        // :: [0-9a-fA-F]
+        hexDigit = new PredicateLiteral("hexDigit", null, c -> switch (c) {
             case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                  'a', 'b', 'c', 'd', 'e', 'f',
                  'A', 'B', 'C', 'D', 'E', 'F' -> true;
             default -> false;
         }),
-        octalEscape = union(octalDigit, group(ign_none, octalDigit, octalDigit),
-                            group(ign_none, octalDigit, octalDigit, octalDigit)),
-        hexEscape = group(ign_none, literal('u'), hexDigit, hexDigit, hexDigit, hexDigit),
-        escapeSequence = group(ign_none, literal('\\'), union(charEscape, octalEscape, hexEscape)),
 
-        switchStart = literal('['),
-        switchEnd = literal(']'),
-        switchElement = all.except(switchStart, switchEnd),
-        charSwitch = group(ign_none, switchStart, union(switchElement.multiple(ign_none), escapeSequence),
-                           switchEnd),
-        stringBoundary = literal('\''),
-        stringElement = all.except(stringBoundary),
-        string = group(ign_none, stringBoundary, union(stringElement.multiple(ign_none), escapeSequence),
-                       stringBoundary),
+        // :: octalDigit | octalDigit octalDigit | octalDigit octalDigit octalDigit
+        octalEscape = new Union("octalEscape", null,
+            octalDigit,
+            new Grouping(null, null, Nothing.INSTANCE, octalDigit, octalDigit),
+            new Grouping(null, null, Nothing.INSTANCE, octalDigit, octalDigit, octalDigit)
+        ),
 
-        union = literal('|'),
-        except = literal('-'),
-        optional = literal('?'),
-        multiple = literal('+'),
-        any = literal('*');
+        // ::<nothing> 'u' hexDigit hexDigit hexDigit hexDigit
+        hexEscape = new Grouping("hexEscape", null, Nothing.INSTANCE, new CharLiteral(null, null, 'u'),
+                                 hexDigit, hexDigit, hexDigit, hexDigit),
+
+        // ::<nothing> '\\' (charEscape | octalEscape | hexEscape)
+        escapeSequence = new Grouping("escapeSequence", null, Nothing.INSTANCE,
+            new CharLiteral(null, null, '\\'),
+            new Union(null, null, charEscape, octalEscape, hexEscape)
+        ),
+
+        // :: '[
+        switchStart = new CharLiteral("switchStart", null, '['),
+
+        // :: ']'
+        switchEnd = new CharLiteral("switchEnd", null, ']'),
+
+        // :: anything - (switchStart | switchEnd)
+        switchElement = new Exclusion(null, null, Anything.INSTANCE, switchStart, switchEnd),
+
+        // TODO implement '-' functionality in switch statements
+        // TODO check if this is correct
+        // ::<nothing> switchStart (switchElement+<nothing> | escapeSequence)*<nothing> switchEnd
+        charSwitch = new Grouping("charSwitch", null, Nothing.INSTANCE,
+            switchStart,
+            new Wildcard(null, null, Nothing.INSTANCE,
+                new Union(null, null,
+                    new Repetition(null, null, Nothing.INSTANCE, switchElement),
+                    escapeSequence
+                )
+            ),
+            switchEnd
+        ),
+
+        // :: '\''
+        stringBoundary = new CharLiteral("stringBoundary", null, '\''),
+
+        // :: anything - stringBoundary
+        stringElement = new Exclusion("stringElement", null, Anything.INSTANCE, stringBoundary),
+
+        // ::<nothing> stringBoundary (stringElement+<nothing> | escapeSequence)*<nothing> stringBoundary
+        string = new Grouping("string", null, Nothing.INSTANCE,
+            stringBoundary,
+            new Wildcard(null, null, Nothing.INSTANCE,
+                new Union(null, null,
+                    new Repetition(null, null, Nothing.INSTANCE, stringElement),
+                    escapeSequence
+                )
+            ),
+            stringBoundary
+        ),
+
+        // :: '<' identifier '>'
+        alignment = new Grouping("alignment", null, multiLine,
+            new CharLiteral(null, null, '<'),
+            identifier,
+            new CharLiteral(null, null, '>')
+        ),
+
+        // :: '.'
+        eof = new CharLiteral("eof", null, '.');
 
     private static final RecursiveUnion
-        expression = recursiveUnion(identifier, charSwitch, string, ref_modification, ref_operation,
-                           group(ign_space, literal('('), ref_expression, literal(')')));
+        // :: identifier | charSwitch | string | modification | operation | ('(' expression ')')<multiLine>
+        expression = new RecursiveUnion("expression", null,
+            identifier,
+            charSwitch,
+            string,
+            modification_proxy,
+            operation_proxy,
+            new Grouping(null, null, multiLine,
+                new CharLiteral(null, null, '('),
+                expression_proxy,
+                new CharLiteral(null, null, ')'),
+                alignment
+            ),
+            eof     // Epsilon
+        );
+
+    private static final DecomposedUnion
+        expression_less2 = new DecomposedUnion(expression, 2),
+        expression_less3 = new DecomposedUnion(expression, 3);
 
     private static final AbstractSymbol
-        dcmp2_expression = expression.decompose(2),
-        dcmp3_expression = expression.decompose(3),
+        // :: '?'
+        optional = new CharLiteral("optional", null, '?'),
 
-        modification = union(group(ign_space, dcmp2_expression, optional), group(ign_space, dcmp2_expression, multiple),
-                             group(ign_space, dcmp2_expression, any)),
-        operation = union(group(ign_space, dcmp3_expression, union, expression),
-                          group(ign_space, dcmp3_expression, except, expression)),
+        // :: '+'
+        repetition = new CharLiteral("multiple", null, '+'),
 
-        expressions = expression.multiple(ign_space),
-        newline = union(literal(System.lineSeparator()), literal(Script.EOF)),
-        handler = group(ign_space, literal("->"), identifier, horizontalSpace, newline).optional(),
-        productionsStart = group(ign_space, expressions, handler),
-        productionsPart = group(ign_space, union, expressions, handler),
-        productions = group(ign_space, productionsStart, productionsPart.any(ign_space)),
+        // :: '*'
+        wildcard = new CharLiteral("any", null, '*'),
 
-        rule = group(ign_space, identifier, literal("::"), productions),
-        infoRule = group(ign_space, identifier, literal(':'), productions),
+        // :: (expression optional)<multiLine> | (expression repetition)<multiLine> | (expression wildcard)<multiLine>
+        modification = new Union("modification", null,
+            new Grouping(null, null, multiLine, expression_less2, optional),
+            new Grouping(null, null, multiLine, expression_less2, repetition, alignment),
+            new Grouping(null, null, multiLine, expression_less2, wildcard, alignment)
+        ),
 
-        start = union(infoRule, rule).multiple(ign_space);
+        // :: '|'
+        union = new CharLiteral("union", null, '|'),
+
+        // :: '-'
+        exclusion = new CharLiteral("except", null, '-'),
+
+        // :: (expression union expression)<multiLine> | (expression exclusion expression)<multiLine>
+        operation = new Union("operation", null,
+            new Grouping(null, null, multiLine, expression_less3, union, expression_less3),
+            new Grouping(null, null, multiLine, expression_less3, exclusion, expression_less3)
+        ),
+
+        // :: (expression - (expression infoRuleDecl | expression ruleDecl)<multiLine>)+<multiLine>
+        expressions = new Repetition("expressions", null, multiLine, expression),
+
+        // :: '{line feed}' | .
+        lineBreak = new Union("lineBreak", null,
+            new StringLiteral(null, null, System.lineSeparator()),
+            new CharLiteral(null, null, Script.EOF)
+        ),
+
+        // :: ('->' identifier line_break)<inline>?
+        handler = new Optional("handler", null,
+            new Grouping(null, null, inline,
+                new StringLiteral(null, null, "->"),
+                identifier,
+                lineBreak
+            )
+        ),
+        // TODO add:
+        /*
+            <<strict ignore>>
+
+         */
+        // :: ('::' expressions handler)<multiline>*<inline>
+        ruleProductions = new Repetition("ruleProductions", null, inline,
+            new Grouping(null, null, multiLine,
+                new StringLiteral(null, null, "::"),
+                expressions,
+                handler
+            )
+        ),
+
+        // :: (':' expressions handler)<multiline>*<inline>
+        infoRuleProductions = new Repetition("infoRuleProductions", null, inline,
+            new Grouping(null, null, multiLine,
+                new CharLiteral(null, null, ':'),
+                expressions,
+                handler
+            )
+        ),
+
+        rule = group("rule", null, multiLine, identifier, ruleProductions),
+
+        infoRule = group("infoRule", null, multiLine, identifier, infoRuleProductions),
+
+        start = union("start", null, infoRule, rule).multiple(multiLine);
 
     static {
-        ref_modification.assign(modification);
-        ref_operation.assign(operation);
-        ref_expression.assign(expression);
+        modification_proxy.assign(modification);
+        operation_proxy.assign(operation);
+        expression_proxy.assign(expression);
     }
     public static Reader getFile(String path) throws Exception {
-        URL url = ign_space.getClass().getClassLoader().getResource("src/some.txt");
+        URL url = multiLine.getClass().getClassLoader().getResource("src/some.txt");
         assert(url != null);
         return
         new BufferedReader(
@@ -125,6 +267,6 @@ public class Sample {
         );
     }
     public static void main(String[] args) throws Exception {
-        System.out.println(start.parse(ign_space, getFile("src/some.txt")));
+        System.out.println(start.parse(multiLine, getFile("src/some.txt")));
     }
 }

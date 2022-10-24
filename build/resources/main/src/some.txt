@@ -1,1 +1,2 @@
-rule : y
+rule : y32523 -> afe
+fee : f5

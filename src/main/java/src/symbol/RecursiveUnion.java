@@ -1,28 +1,22 @@
 package src.symbol;
 
-import src.handler.Handler;
+import src.visitor.Visitor;
 import src.script.Script;
 
 import java.io.IOException;
 
+/**
+ * @see DecomposedUnion
+ */
 public final class RecursiveUnion extends Symbol {
-    RecursiveUnion(String name, Handler handler, AbstractSymbol[] symbols) {
-        super(name, handler);
+    final boolean[] decomposed;
+    private final AbstractSymbol[] symbols;
+
+    public RecursiveUnion(String name, Visitor visitor, AbstractSymbol... symbols) {
+        super(name, visitor);
 
         this.symbols = symbols;
         decomposed = new boolean[symbols.length - 1];
-    }
-
-    public Symbol decompose(int which) {
-        return new Symbol(name, handler) {
-            @Override
-            public int accept(Script input) throws IOException {
-                decomposed[which] = true;
-                final int result = RecursiveUnion.this.accept(input);
-                decomposed[which] = false;
-                return result;
-            }
-        };
     }
 
     @Override
@@ -38,7 +32,7 @@ public final class RecursiveUnion extends Symbol {
                 continue;
             result = symbols[i].accept(input);
             if (result != NO_MATCH) {
-                input.match(this, 1, i);
+                input.match(this, i, 1);
                 return result;
             }
         }
@@ -46,6 +40,21 @@ public final class RecursiveUnion extends Symbol {
         return NO_MATCH;
     }
 
-    private final AbstractSymbol[] symbols;
-    private final boolean[] decomposed;
+    @Override
+    boolean isInclusiveComposite() {
+        return true;
+    }
+
+    @Override
+    public String defaultName() {
+        final var builder = new StringBuilder();
+        for (int i = 0; i < symbols.length; ++i) {
+            if (!decomposed[i]) {
+                if (!builder.isEmpty())
+                    builder.append(" | ");
+                builder.append(symbols[i].unambiguousName());
+            }
+        }
+        return builder.toString();
+    }
 }
