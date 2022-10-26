@@ -1,12 +1,13 @@
-package src.symbol;
+package src.element.literal;
 
+import src.element.GrammarElement;
 import src.visitor.Visitor;
 import src.script.Script;
 
 import java.io.IOException;
 import java.util.function.IntPredicate;
 
-public final class PredicateLiteral extends Symbol {
+final class PredicateLiteral extends Literal {
     private final IntPredicate literal;
 
     public PredicateLiteral(String name, Visitor visitor, IntPredicate literal) {
@@ -21,7 +22,7 @@ public final class PredicateLiteral extends Symbol {
             input.matchLiteral(this, 1);
             return 1;
         }
-        return NO_MATCH;
+        return GrammarElement.NO_MATCH;
     }
 
     @Override

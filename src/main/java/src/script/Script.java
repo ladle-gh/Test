@@ -1,7 +1,7 @@
 package src.script;
 
-import src.symbol.AbstractSymbol;
-import src.symbol.Symbol;
+import src.element.GrammarElement;
+import src.element.LexicalUnit;
 import src.util.IntStack;
 
 import java.io.IOException;
@@ -12,7 +12,7 @@ import java.util.*;
 import static java.util.Collections.binarySearch;
 
 /**
- * Unified API used by {@link AbstractSymbol symbols} to read character data from a {@link String} or
+ * Unified API used by {@link GrammarElement symbols} to read character data from a {@link String} or
  * {@link Reader}.
  *
  * @see ScriptSegment
@@ -36,7 +36,7 @@ public abstract class Script {
      * @param ignore symbol whose match length is used as alignment
      * @return script representation of {@code input}
      */
-    public static Script of(String input, AbstractSymbol ignore) {
+    public static Script of(String input, GrammarElement ignore) {
         try {
             var script = new Script() {
                 @Override
@@ -63,7 +63,7 @@ public abstract class Script {
      * @param ignore symbol whose match length is used as alignment
      * @return script representation of {@code input} with default buffer size
      */
-    public static Script of(Reader input, AbstractSymbol ignore) throws IOException {
+    public static Script of(Reader input, GrammarElement ignore) throws IOException {
         return of(input, ignore, DEFAULT_BUFFER_SIZE);
     }
 
@@ -74,7 +74,7 @@ public abstract class Script {
      * @return script representation of {@code input}
      * @throws IOException an error occurred during reading of {@code input}
      */
-    public static Script of(Reader input, AbstractSymbol ignore, int bufferSize) throws IOException {
+    public static Script of(Reader input, GrammarElement ignore, int bufferSize) throws IOException {
         var script = new Script() {
             @Override
             public void mark() {
@@ -172,7 +172,7 @@ public abstract class Script {
     protected int next = 0;
     private final IntStack markedIndices = new IntStack(), localSegments = new IntStack();
     private final Deque<ScriptSegment> segments = new ArrayDeque<>();
-    private boolean recordIndices = true;
+    private int queryDepth = 0;
 
     /**
      * Internal constructor.
@@ -181,12 +181,19 @@ public abstract class Script {
         localSegments.push(0);
     }
 
-    public final void advance(int by) {
+    protected void advance(int by) {
         next += by;
     }
 
+    public final int align(int result, GrammarElement ignore) throws IOException {
+        final int ignored = query(ignore);
+        advance(result);
+        advance(ignored);
+        return result + ignored;
+    }
+
     public final void fail() {
-        if (recordIndices) {
+        if (queryDepth == 0) {
             final int popCount = localSegments.pop();
             for (int i = 0; i < popCount; ++i)
                 segments.pop();
@@ -194,44 +201,40 @@ public abstract class Script {
         revert();
     }
 
+    static int n = 0;
     public void mark() {
         markedIndices.push(next);
-        if (recordIndices)
+        if (queryDepth == 0)
                 localSegments.push(0);
     }
 
-    public final void match(Symbol to) {
-        if (recordIndices) {
-            segments.push(new ScriptSegment(this, to, markedIndices.peek(), next));
+    public final void match(LexicalUnit to) {
+        if (queryDepth == 0) {
+            segments.push(ScriptSegment.forTerminal(this, to, markedIndices.peek(), next));
             localSegments.popIncrement();
         }
         revert();
     }
 
-    public final void match(Symbol to, int totalChildren) {
-        if (recordIndices) {
-            segments.push(new ScriptSegment(this, to, totalChildren, segments));
+    public final void match(LexicalUnit to, int totalChildren) {
+        if (queryDepth == 0) {
+            segments.push(ScriptSegment.forNonterminal(this, to, totalChildren, segments));
             localSegments.popIncrement();
         }
         revert();
     }
 
-    public final void match(Symbol to, int totalChildren, int production) {
-        if (recordIndices) {
-            segments.push(new ScriptSegment(this, to, totalChildren, segments) {
-                @Override
-                public int production() {
-                    return production;
-                }
-            });
+    public final void matchUnion(LexicalUnit to, int production) {
+        if (queryDepth == 0) {
+            segments.push(ScriptSegment.forUnion(this, to, segments, production));
             localSegments.popIncrement();
         }
         revert();
     }
 
-    public final void matchLiteral(Symbol to, int length) {
-        if (recordIndices) {
-            segments.push(new ScriptSegment(this, to, next, next + length));
+    public final void matchLiteral(LexicalUnit to, int length) {
+        if (queryDepth == 0) {
+            segments.push(ScriptSegment.forTerminal(this, to, next, next + length));
             localSegments.increment();
         }
     }
@@ -247,10 +250,10 @@ public abstract class Script {
         next = markedIndices.pop();
     }
 
-    public final int query(AbstractSymbol s) throws IOException {
-        recordIndices = false;
+    public final int query(GrammarElement s) throws IOException {
+        ++queryDepth;
         final int result = s.accept(this);
-        recordIndices = true;
+        --queryDepth;
         return result;
     }
 

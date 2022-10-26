@@ -1,4 +1,4 @@
-package src.symbol;
+package src.element;
 
 import src.script.Script;
 
@@ -6,19 +6,20 @@ import java.io.IOException;
 
 /**
  * <p>
- *     An {@link AbstractSymbol} placeholder.
+ *     An {@link GrammarElement} placeholder.
  * </p>
  * <p>
  *     Used to construct symbols utilizing recursion.
  * </p>
  */
-public final class Proxy extends AbstractSymbol {
-    private AbstractSymbol target;
+public final class Reference extends GrammarElement {
+
+    private GrammarElement target;
 
     /**
      * Reduces the {@link #accept(Script)} method of this {@code Proxy} to that of {@code target}.
      */
-    public void assign(AbstractSymbol target) {
+    public void assign(GrammarElement target) {
         this.target = target;
     }
 
@@ -33,7 +34,7 @@ public final class Proxy extends AbstractSymbol {
     }
 
     @Override
-    String unambiguousName() {
+    public String unambiguousName() {
         return target.unambiguousName();
     }
 }

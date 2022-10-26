@@ -1,272 +1,198 @@
 package src;
 
-import src.script.Script;
-import src.symbol.*;
+import src.element.symbol.*;
+import src.element.symbol.repetition.Span;
+import src.element.*;
+import src.element.literal.Literal;
 
 import java.io.*;
 import java.net.URL;
 
+import static src.element.literal.ShortCircuit.any;
+import static src.element.literal.ShortCircuit.none;
+
 public class Sample {
-    private static final Proxy
-        modification_proxy = new Proxy(),
-        operation_proxy = new Proxy(),
-        expression_proxy = new Proxy();
+    private static final Reference
+        modification_ref = new Reference(),
+        operation_ref = new Reference(),
+        expression_ref = new Reference();
 
-    public static final AbstractSymbol
-        /*
-            // :: []?
-            nothing = new PredicateLiteral("nothing", null, c -> false);
+    public static final GrammarElement
+    /*
+        // : []?
+        none = Literal.of("NONE", c -> false);
 
-            // :: [-]
-            anything = new PredicateLiteral("anything", null, c -> true);
-         */
+        // : [-]
+        any = Literal.of("ANY", c -> true);
+    */
 
-        // :: [ \t\n\013\f\r]
-        whitespace = new PredicateLiteral("whitespace", null, c -> switch (c) {
+        // : [ \t\n\013\f\r]
+        whitespace = Literal.of("whitespace", c -> switch (c) {
             case ' ', '\t', '\n', '\013', '\f', '\r' -> true;
             default -> false;
         }),
+    
+        // : NONE
+        UNALIGNED = none,
+    
+        // : ('#' ANY '\n')..NONE
+        comment = Grouping.of("comment", UNALIGNED, Literal.of('#'), any, Literal.of('\n')),
 
-        // ::<nothing> '#' anything '\n'
-        comment = new Grouping("comment", null, Nothing.INSTANCE,
-            new CharLiteral(null, null, '#'),
-            Anything.INSTANCE,
-            new CharLiteral(null, null, '\n')
-        ),
+        // : (whitespace | comment)*..NONE
+        ALIGNED = Span.of("MULTILINE", UNALIGNED, Union.of(whitespace, comment)),
 
-        // :: (whitespace | comment)*<nothing>
-        multiLine = new Wildcard("multiLine", null, Nothing.INSTANCE, new Union(null, null, whitespace, comment)),
-
-        // :: [ \t\013\f]*<nothing>
-        inline = new Wildcard("inline", null, Nothing.INSTANCE,
-                                        new PredicateLiteral(null, null, c -> switch (c) {
-            case ' ', '\t', '\013', '\f' -> true;
-            default -> false;
-        })),
-
-        // :: [a-zA-Z]
-        identifierStart = new PredicateLiteral("identifierStart", null, c -> switch (c) {
-            case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-                 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-                 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-                 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z' -> true;
-            default -> false;
-        }),
-
-        // :: [a-zA-Z0-9]
-        identifierPart = new PredicateLiteral("identifierPart", null, c -> switch (c) {
+        // : [a-zA-Z]
+        identifierStart = Literal.of("identifierStart", c -> switch (c) {
             case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
                  'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
                  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
                  'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-                 '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' -> true;
-            default -> false;
+                 '_' -> true;
+            default  -> false;
         }),
 
-        // ::<nothing> identifierStart identifierPart*<nothing>
-        identifier = new Grouping("identifier", null, Nothing.INSTANCE, identifierStart,
-                                  new Wildcard(null, null, Nothing.INSTANCE, identifierPart)),
+        // : [a-zA-Z0-9]
+        identifierPart = Literal.of("identifierPart", c -> switch (c) {
+            case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+                 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+                 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+                 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+                 '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+                 '_' -> true;
+            default  -> false;
+        }),
 
-        // :: [t'nr\\f]
-        charEscape = new PredicateLiteral("charEscape", null, c -> switch (c) {
+        // : (identifierStart identifierPart*..NONE)..NONE
+        identifier = Grouping.of("identifier", UNALIGNED, identifierStart, Span.of(UNALIGNED, identifierPart)),
+
+        // : [t'nr\\f]
+        charEscape = Literal.of("charEscape", c -> switch (c) {
             case 't', '\'', 'n', 'r', '\\', 'f' -> true;
             default -> false;
         }),
 
-        // :: [0-7]
-        octalDigit = new PredicateLiteral("octalDigit", null, c -> switch (c) {
+        // : [0-7]
+        octalDigit = Literal.of("octalDigit", c -> switch (c) {
             case '0', '1', '2', '3', '4', '5', '6', '7' -> true;
             default -> false;
         }),
 
-        // :: [0-9a-fA-F]
-        hexDigit = new PredicateLiteral("hexDigit", null, c -> switch (c) {
+        // : [0-9a-fA-F]
+        hexDigit = Literal.of("hexDigit", c -> switch (c) {
             case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                  'a', 'b', 'c', 'd', 'e', 'f',
                  'A', 'B', 'C', 'D', 'E', 'F' -> true;
             default -> false;
         }),
 
-        // :: octalDigit | octalDigit octalDigit | octalDigit octalDigit octalDigit
-        octalEscape = new Union("octalEscape", null,
+        // : octalDigit | (octalDigit octalDigit)..NONE | (octalDigit octalDigit octalDigit)..NONE
+        octalEscape = Union.of("octalEscape",
             octalDigit,
-            new Grouping(null, null, Nothing.INSTANCE, octalDigit, octalDigit),
-            new Grouping(null, null, Nothing.INSTANCE, octalDigit, octalDigit, octalDigit)
+            Grouping.of(UNALIGNED, octalDigit, octalDigit),
+            Grouping.of(UNALIGNED, octalDigit, octalDigit, octalDigit)
         ),
 
-        // ::<nothing> 'u' hexDigit hexDigit hexDigit hexDigit
-        hexEscape = new Grouping("hexEscape", null, Nothing.INSTANCE, new CharLiteral(null, null, 'u'),
-                                 hexDigit, hexDigit, hexDigit, hexDigit),
+        // : ('u' hexDigit hexDigit hexDigit hexDigit)..NONE
+        hexEscape = Grouping.of("hexEscape", UNALIGNED, Literal.of('u'), hexDigit, hexDigit, hexDigit, hexDigit),
 
-        // ::<nothing> '\\' (charEscape | octalEscape | hexEscape)
-        escapeSequence = new Grouping("escapeSequence", null, Nothing.INSTANCE,
-            new CharLiteral(null, null, '\\'),
-            new Union(null, null, charEscape, octalEscape, hexEscape)
+        // : ('\\' (charEscape | octalEscape | hexEscape))..NONE
+        escapeSequence = Grouping.of("escapeSequence", UNALIGNED,
+            Literal.of('\\'),
+            Union.of(charEscape, octalEscape, hexEscape)
         ),
 
-        // :: '[
-        switchStart = new CharLiteral("switchStart", null, '['),
+        // : '-'
+        minusSign = Literal.of('-'),
 
-        // :: ']'
-        switchEnd = new CharLiteral("switchEnd", null, ']'),
+        // : '['
+        switchStart = Literal.of("switchStart", '['),
 
-        // :: anything - (switchStart | switchEnd)
-        switchElement = new Exclusion(null, null, Anything.INSTANCE, switchStart, switchEnd),
+        // : ']'
+        switchEnd = Literal.of("switchEnd", ']'),
 
-        // TODO implement '-' functionality in switch statements
-        // TODO check if this is correct
-        // ::<nothing> switchStart (switchElement+<nothing> | escapeSequence)*<nothing> switchEnd
-        charSwitch = new Grouping("charSwitch", null, Nothing.INSTANCE,
-            switchStart,
-            new Wildcard(null, null, Nothing.INSTANCE,
-                new Union(null, null,
-                    new Repetition(null, null, Nothing.INSTANCE, switchElement),
-                    escapeSequence
-                )
-            ),
-            switchEnd
-        ),
+        // : (escapeSequence | ANY) - (switchStart | switchEnd)
+        switchElement = Exclusion.of("switchElement", Union.of(escapeSequence, any), Union.of(switchStart, switchEnd)),
 
-        // :: '\''
-        stringBoundary = new CharLiteral("stringBoundary", null, '\''),
+        switchCase = Union.of(Grouping.of(UNALIGNED, switchElement, minusSign, switchElement), switchElement),
 
-        // :: anything - stringBoundary
-        stringElement = new Exclusion("stringElement", null, Anything.INSTANCE, stringBoundary),
+        // : (switchStart switchCase*..NONE switchEnd)..NONE
+        charSwitch = Grouping.of("charSwitch", UNALIGNED, switchStart, Span.of(UNALIGNED, switchCase), switchEnd),
 
-        // ::<nothing> stringBoundary (stringElement+<nothing> | escapeSequence)*<nothing> stringBoundary
-        string = new Grouping("string", null, Nothing.INSTANCE,
-            stringBoundary,
-            new Wildcard(null, null, Nothing.INSTANCE,
-                new Union(null, null,
-                    new Repetition(null, null, Nothing.INSTANCE, stringElement),
-                    escapeSequence
-                )
-            ),
-            stringBoundary
-        ),
+        // : '\''
+        stringBoundary = Literal.of("stringBoundary", '\''),
 
-        // :: '<' identifier '>'
-        alignment = new Grouping("alignment", null, multiLine,
-            new CharLiteral(null, null, '<'),
-            identifier,
-            new CharLiteral(null, null, '>')
-        ),
+        // : (escapeSequence | ANY) - stringBoundary
+        stringElement = Exclusion.of("stringElement", Union.of(escapeSequence, any), stringBoundary),
 
-        // :: '.'
-        eof = new CharLiteral("eof", null, '.');
+        // : (stringBoundary stringElement*..NONE stringBoundary)..NONE
+        string = Grouping.of("string", UNALIGNED, stringBoundary, Span.of(UNALIGNED, stringElement), stringBoundary),
+
+        // : ('..' identifier)..MULTILINE
+        alignment = Grouping.of("alignment", ALIGNED, Literal.of(".."), identifier);
 
     private static final RecursiveUnion
-        // :: identifier | charSwitch | string | modification | operation | ('(' expression ')')<multiLine>
-        expression = new RecursiveUnion("expression", null,
+        // : identifier | charSwitch | string | modification | operation | ('(' expression ')')..MULTILINE
+        expression = RecursiveUnion.of("expression",
             identifier,
             charSwitch,
             string,
-            modification_proxy,
-            operation_proxy,
-            new Grouping(null, null, multiLine,
-                new CharLiteral(null, null, '('),
-                expression_proxy,
-                new CharLiteral(null, null, ')'),
-                alignment
-            ),
-            eof     // Epsilon
+        modification_ref,
+        operation_ref,
+            Grouping.of(ALIGNED, Literal.of('('), expression_ref, Literal.of(')'), alignment)
         );
 
-    private static final DecomposedUnion
-        expression_less2 = new DecomposedUnion(expression, 2),
-        expression_less3 = new DecomposedUnion(expression, 3);
+    private static final PartialUnion
+        expression_recur2 = expression.recur(2),
+        expression_recur3 = expression.recur(3);
 
-    private static final AbstractSymbol
-        // :: '?'
-        optional = new CharLiteral("optional", null, '?'),
-
-        // :: '+'
-        repetition = new CharLiteral("multiple", null, '+'),
-
-        // :: '*'
-        wildcard = new CharLiteral("any", null, '*'),
-
-        // :: (expression optional)<multiLine> | (expression repetition)<multiLine> | (expression wildcard)<multiLine>
-        modification = new Union("modification", null,
-            new Grouping(null, null, multiLine, expression_less2, optional),
-            new Grouping(null, null, multiLine, expression_less2, repetition, alignment),
-            new Grouping(null, null, multiLine, expression_less2, wildcard, alignment)
+    private static final GrammarElement
+        // : (expression '?')..MULTILINE | (expression '+')..MULTILINE | (expression '*')..MULTILINE
+        modification = Union.of("modification",
+            Grouping.of(ALIGNED, expression_recur2, Literal.of('?')),               // Optional
+            Grouping.of(ALIGNED, expression_recur2, Literal.of('+'), alignment),    // Repeat
+            Grouping.of(ALIGNED, expression_recur2, Literal.of('*'), alignment)     // Wildcard
         ),
 
-        // :: '|'
-        union = new CharLiteral("union", null, '|'),
-
-        // :: '-'
-        exclusion = new CharLiteral("except", null, '-'),
-
-        // :: (expression union expression)<multiLine> | (expression exclusion expression)<multiLine>
-        operation = new Union("operation", null,
-            new Grouping(null, null, multiLine, expression_less3, union, expression_less3),
-            new Grouping(null, null, multiLine, expression_less3, exclusion, expression_less3)
+        // : (expression '|' expression)..MULTILINE | (expression '-' expression)..MULTILINE
+        operation = Union.of("operation",
+            Grouping.of(ALIGNED, expression_recur3, Literal.of('|'), expression_recur3),    // Union
+            Grouping.of(ALIGNED, expression_recur3, minusSign, expression_recur3)           // Exclusion
         ),
 
-        // :: (expression - (expression infoRuleDecl | expression ruleDecl)<multiLine>)+<multiLine>
-        expressions = new Repetition("expressions", null, multiLine, expression),
+        // : ('->' identifier)..MULTILINE?
+        alias = Optional.of("alias", Grouping.of(ALIGNED, Literal.of("->"), identifier)),
 
-        // :: '{line feed}' | .
-        lineBreak = new Union("lineBreak", null,
-            new StringLiteral(null, null, System.lineSeparator()),
-            new CharLiteral(null, null, Script.EOF)
+        // : (':' (identifier | charSwitch | string | modification | operation))..MULTILINE
+        root = Grouping.of("root", ALIGNED,
+            Literal.of(':'),
+            Union.of(identifier, charSwitch, string, modification, operation)
         ),
 
-        // :: ('->' identifier line_break)<inline>?
-        handler = new Optional("handler", null,
-            new Grouping(null, null, inline,
-                new StringLiteral(null, null, "->"),
-                identifier,
-                lineBreak
-            )
-        ),
-        // TODO add:
-        /*
-            <<strict ignore>>
+        // : ('~' identifier root)..MULTILINE
+        align = Grouping.of("align", ALIGNED, Literal.of('~'), identifier, root),
 
-         */
-        // :: ('::' expressions handler)<multiline>*<inline>
-        ruleProductions = new Repetition("ruleProductions", null, inline,
-            new Grouping(null, null, multiLine,
-                new StringLiteral(null, null, "::"),
-                expressions,
-                handler
-            )
-        ),
+        // : ('!' identifier root)..MULTILINE
+        start = Grouping.of("start", ALIGNED, Literal.of('!'), identifier, root),
 
-        // :: (':' expressions handler)<multiline>*<inline>
-        infoRuleProductions = new Repetition("infoRuleProductions", null, inline,
-            new Grouping(null, null, multiLine,
-                new CharLiteral(null, null, ':'),
-                expressions,
-                handler
-            )
-        ),
+        // : (identifier alias root)..MULTILINE
+        symbol = Grouping.of("symbol", ALIGNED, identifier, alias, root),
 
-        rule = group("rule", null, multiLine, identifier, ruleProductions),
-
-        infoRule = group("infoRule", null, multiLine, identifier, infoRuleProductions),
-
-        start = union("start", null, infoRule, rule).multiple(multiLine);
+        // : (align | start | symbol)*..MULTILINE
+        __start__ = Span.of("__start__", ALIGNED, Union.of(align, start, symbol));
 
     static {
-        modification_proxy.assign(modification);
-        operation_proxy.assign(operation);
-        expression_proxy.assign(expression);
+        modification_ref.assign(modification);
+        operation_ref.assign(operation);
+        expression_ref.assign(expression);
     }
+    
     public static Reader getFile(String path) throws Exception {
-        URL url = multiLine.getClass().getClassLoader().getResource("src/some.txt");
+        URL url = ALIGNED.getClass().getClassLoader().getResource("src/some.txt");
         assert(url != null);
-        return
-        new BufferedReader(
-            new FileReader(
-                new File(url.toURI())
-            )
-        );
+        return new BufferedReader(new FileReader(new File(url.toURI())));
     }
+    
     public static void main(String[] args) throws Exception {
-        System.out.println(start.parse(multiLine, getFile("src/some.txt")));
+        System.out.println(__start__.parse(ALIGNED, getFile("src/some.txt")));
     }
 }

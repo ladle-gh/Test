@@ -1,4 +1,4 @@
-package src.symbol;
+package src.element.literal;
 
 import src.visitor.Visitor;
 import src.script.Script;
@@ -8,10 +8,10 @@ import java.io.IOException;
 /**
  * <em>Literal</em> symbol matching a single character from input.
  */
-public final class CharLiteral extends Symbol {
+final class CharLiteral extends Literal {
     private final int literal;
 
-    public CharLiteral(String name, Visitor visitor, int literal) {
+    CharLiteral(String name, Visitor visitor, int literal) {
         super(name, visitor);
         this.literal = literal;
     }
@@ -27,7 +27,7 @@ public final class CharLiteral extends Symbol {
     }
 
     @Override
-    String defaultName() {
+    protected String defaultName() {
         return '\'' + escape(literal) + '\'';
     }
 }

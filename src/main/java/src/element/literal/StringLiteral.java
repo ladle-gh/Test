@@ -1,11 +1,12 @@
-package src.symbol;
+package src.element.literal;
 
+import src.element.GrammarElement;
 import src.visitor.Visitor;
 import src.script.Script;
 
 import java.io.IOException;
 
-public final class StringLiteral extends Symbol {
+final class StringLiteral extends Literal {
     private final String literal;
 
     public StringLiteral(String name, Visitor visitor, String literal) {
@@ -19,14 +20,14 @@ public final class StringLiteral extends Symbol {
         for (int i = 0; i < literal.length(); ++i) {
             c = input.read(i);
             if (c != literal.charAt(i))
-                return NO_MATCH;
+                return GrammarElement.NO_MATCH;
         }
         input.matchLiteral(this, literal.length());
         return literal.length();
     }
 
     @Override
-    String defaultName() {
-        return '\'' + literal.chars().mapToObj(Symbol::escape).reduce("", String::concat) + '\'';
+    protected String defaultName() {
+        return '\'' + literal.chars().mapToObj(Literal::escape).reduce("", String::concat) + '\'';
     }
 }

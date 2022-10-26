@@ -1,17 +1,14 @@
 package src.util;
 
 import java.util.Arrays;
+import java.util.NoSuchElementException;
 
 /**
  * <p>
  *     Basic implementation of an {@code int} stack.
  * </p>
  * <p>
- *     Advantages over {@link java.util.Deque} include:
- *      <ul>
- *          <li>Absence of auto-boxing and unboxing</li>
- *          <li>{@link #pop(int) Multi-pop} functionality</li>
- *      </ul>
+ *     Advantages over {@link java.util.Deque} include absence of auto-boxing and unboxing.
  * </p>
  */
 public final class IntStack {
@@ -21,6 +18,10 @@ public final class IntStack {
     private static final int DEFAULT_CAPACITY = 32;
 
     private static final int GROWTH_FACTOR = 2;
+
+    private static String underflowAt(int size) {
+        return "Stack underflow at " + size + ".";
+    }
 
     private int[] ints;
     private int size = 0;
@@ -35,25 +36,25 @@ public final class IntStack {
     /**
      * Increments top of stack.
      *
-     * @throws StackUnderflowException stack is empty
+     * @throws NoSuchElementException stack is empty
      */
     public void increment() {
         try {
             ++ints[size - 1];
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw new StackUnderflowException(size - 1, e);
+            throw new NoSuchElementException(underflowAt(size - 1), e);
         }
     }
 
     /**
      * @return top of stack
-     * @throws StackUnderflowException stack is empty
+     * @throws NoSuchElementException stack is empty
      */
     public int peek() {
         try {
             return ints[size - 1];
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw new StackUnderflowException(size - 1, e);
+            throw new NoSuchElementException(underflowAt(size - 1), e);
         }
     }
 
@@ -61,49 +62,34 @@ public final class IntStack {
      * Pops top integer from stack.
      *
      * @return previous top of stack
-     * @throws StackUnderflowException stack is empty
+     * @throws NoSuchElementException stack is empty
      */
     public int pop() {
         try {
             return ints[--size];
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw new StackUnderflowException(size, e);
+            throw new NoSuchElementException(underflowAt(size), e);
         }
-    }
-
-    /**
-     * Pops {@code count} integers from top of stack.
-     */
-    public void pop(int count) {
-        size -= count;
     }
 
     /**
      * Pushes {@code n} to top of stack.
-     * @throws StackUnderflowException call to {@link #pop(int)} causing underflow made beforehand
      */
     public void push(int n) {
         if (size == ints.length)
             resize();
-        try {
-            ints[size++] = n;
-        } catch (ArrayIndexOutOfBoundsException e) {
-            throw new StackUnderflowException(size, e);
-        }
+        ints[size++] = n;
     }
 
     /**
      * Pops top integer from stack. Increments new top of stack.
      */
     public void popIncrement() {
-        ++ints[(--size) - 1];
-    }
-
-    /**
-     * @return sum of all integers in stack
-     */
-    public int sum() {
-        return Arrays.stream(ints).sum();
+        try {
+            ++ints[(--size) - 1];
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw new NoSuchElementException(underflowAt(size), e);
+        }
     }
 
     /**

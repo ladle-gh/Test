@@ -1,4 +1,4 @@
-package src.symbol;
+package src.element.symbol;
 
 import src.script.Script;
 
@@ -6,15 +6,15 @@ import java.io.IOException;
 
 /**
  * <em>Composite</em> symbol matching {@link RecursiveUnion}, less a given possible match in addition to those
- * already decomposed by further calls to {@link #DecomposedUnion(RecursiveUnion, int)}).
+ * already decomposed by further calls to {@link #PartialUnion(RecursiveUnion, int)}).
  *
  * @see RecursiveUnion
  */
-public final class DecomposedUnion extends Symbol {
+public final class PartialUnion extends Symbol {
     private final RecursiveUnion base;
     private final int which;
 
-    public DecomposedUnion(RecursiveUnion base, int which) {
+    PartialUnion(RecursiveUnion base, int which) {
         super(base.name(), base.visitor);
         this.base = base;
         this.which = which;
@@ -29,7 +29,7 @@ public final class DecomposedUnion extends Symbol {
     }
 
     @Override
-    boolean isInclusiveComposite() {
-        return true;
+    protected String defaultName() {
+        return base.name() + " ~ " + which;
     }
 }

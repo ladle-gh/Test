@@ -1,50 +1,54 @@
-package src.symbol;
+package src.element.symbol;
 
+import src.element.GrammarElement;
 import src.visitor.Visitor;
 import src.script.Script;
 
 import java.io.IOException;
 
+/**
+ * <em>Operation</em> mapping to a symbol grouping, {@code (x y)}.
+ */
 public final class Grouping extends Symbol {
-    private final AbstractSymbol ignore;
-    private final AbstractSymbol[] symbols;
+    public static Grouping of(GrammarElement ignore, GrammarElement... symbols) {
+        return new Grouping(null, null, ignore, symbols);
+    }
 
-    public Grouping(String name, Visitor visitor, AbstractSymbol ignore, AbstractSymbol... symbols) {
+    public static Grouping of(String name, GrammarElement ignore, GrammarElement... symbols) {
+        return new Grouping(name, null, ignore, symbols);
+    }
+
+    public static Grouping of(String name, Visitor visitor, GrammarElement ignore, GrammarElement... symbols) {
+        return new Grouping(name, visitor, ignore, symbols);
+    }
+
+    private final GrammarElement ignore;
+    private final GrammarElement[] symbols;
+
+    private Grouping(String name, Visitor visitor, GrammarElement ignore, GrammarElement[] symbols) {
         super(name, visitor);
         this.ignore = ignore;
         this.symbols = symbols;
-    }
-
-    public AbstractSymbol symbol(int at) {
-        return symbols[at];
     }
 
     @Override
     public int accept(Script input) throws IOException {
         input.mark();
         int length = 0, result;
-        for (AbstractSymbol symbol : symbols) {
+        for (GrammarElement symbol : symbols) {
             result = symbol.accept(input);
             if (result == NO_MATCH) {
                 input.fail();
                 return NO_MATCH;
             }
-            input.advance(result);
-            length += result;
-            input.advance(result = input.query(ignore));
-            length += result;
+            length += input.align(result, ignore);
         }
         input.match(this, symbols.length);
         return length;
     }
 
     @Override
-    boolean isInclusiveComposite() {
-        return true;
-    }
-
-    @Override
-    public String defaultName() {
+    protected String defaultName() {
         final var builder = new StringBuilder("(");
         for (int i = 0; i < symbols.length; ++i) {
             if (i != 0)

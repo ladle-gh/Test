@@ -1,22 +1,39 @@
-package src.symbol;
+package src.element.symbol;
 
+import src.element.GrammarElement;
 import src.visitor.Visitor;
 import src.script.Script;
 
 import java.io.IOException;
 
 /**
- * @see DecomposedUnion
+ * @see PartialUnion
  */
 public final class RecursiveUnion extends Symbol {
-    final boolean[] decomposed;
-    private final AbstractSymbol[] symbols;
+    public static RecursiveUnion of(GrammarElement... symbols) {
+        return new RecursiveUnion(null, null, symbols);
+    }
 
-    public RecursiveUnion(String name, Visitor visitor, AbstractSymbol... symbols) {
+    public static RecursiveUnion of(String name, GrammarElement... symbols) {
+        return new RecursiveUnion(name, null, symbols);
+    }
+
+    public static RecursiveUnion of(String name, Visitor visitor, GrammarElement... symbols) {
+        return new RecursiveUnion(name, visitor, symbols);
+    }
+
+    final boolean[] decomposed;
+    private final GrammarElement[] symbols;
+
+    private RecursiveUnion(String name, Visitor visitor, GrammarElement[] symbols) {
         super(name, visitor);
 
         this.symbols = symbols;
         decomposed = new boolean[symbols.length - 1];
+    }
+
+    public PartialUnion recur(int which) {
+        return new PartialUnion(this, which);
     }
 
     @Override
@@ -32,7 +49,7 @@ public final class RecursiveUnion extends Symbol {
                 continue;
             result = symbols[i].accept(input);
             if (result != NO_MATCH) {
-                input.match(this, i, 1);
+                input.matchUnion(this, i);
                 return result;
             }
         }
@@ -41,12 +58,7 @@ public final class RecursiveUnion extends Symbol {
     }
 
     @Override
-    boolean isInclusiveComposite() {
-        return true;
-    }
-
-    @Override
-    public String defaultName() {
+    protected String defaultName() {
         final var builder = new StringBuilder();
         for (int i = 0; i < symbols.length; ++i) {
             if (!decomposed[i]) {

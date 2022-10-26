@@ -1,4 +1,4 @@
-package src.symbol;
+package src.element;
 
 import src.script.Script;
 import src.script.ScriptSegment;
@@ -15,7 +15,7 @@ import java.io.UncheckedIOException;
  *     Parser symbols may either be used to parse input directly or as an intermediate between super- and sub-symbols.
  * </p>
  */
-public abstract sealed class AbstractSymbol permits Symbol, Proxy {
+public abstract sealed class GrammarElement permits LexicalUnit, Reference {
     /**
      * Value returned by {@link #accept(Script)} if no match is found.
      */
@@ -24,7 +24,7 @@ public abstract sealed class AbstractSymbol permits Symbol, Proxy {
     /**
      * @return parsed segment containing this symbols
      */
-    public final ScriptSegment parse(AbstractSymbol ignore, String input) {
+    public final ScriptSegment parse(GrammarElement ignore, String input) {
         try {
             var script = Script.of(input, ignore);
             accept(script);
@@ -38,7 +38,7 @@ public abstract sealed class AbstractSymbol permits Symbol, Proxy {
      * @return parsed segment containing this symbols
      * @throws IOException an error occurred while reading input (if {@code input} derived from {@link Reader})
      */
-    public final ScriptSegment parse(AbstractSymbol ignore, Reader istream) throws IOException {
+    public final ScriptSegment parse(GrammarElement ignore, Reader istream) throws IOException {
         var script = Script.of(istream, ignore);
         accept(script);
         return script.parse();
@@ -59,5 +59,5 @@ public abstract sealed class AbstractSymbol permits Symbol, Proxy {
     /**
      * @return name, surrounded in parentheses if necessary to preserve operator precedence
      */
-    abstract String unambiguousName();
+    public abstract String unambiguousName();
 }

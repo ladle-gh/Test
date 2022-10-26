@@ -1,8 +1,9 @@
 package src.script;
 
-import src.symbol.Symbol;
+import src.element.GrammarElement;
 
 import java.util.Deque;
+import java.util.NoSuchElementException;
 
 import static java.lang.System.out;
 
@@ -13,14 +14,38 @@ import static java.lang.System.out;
  */
 public class ScriptSegment implements LocalSegment {
     private static final Object NONE = new Object();
+    private static int tabs = 0;
+
+    static ScriptSegment forUnion(Script parent, GrammarElement match, Deque<ScriptSegment> segments, int production) {
+        return new ScriptSegment(parent, match, segments) {
+            @Override
+            public int production() {
+                return production;
+            }
+        };
+    }
+    static ScriptSegment forNonterminal(Script parent, GrammarElement match, int totalChildren, Deque<ScriptSegment> segments) {
+        return new ScriptSegment(parent, match, totalChildren, segments);
+    }
+    static ScriptSegment forTerminal(Script parent, GrammarElement match, int begin, int end) {
+        return new ScriptSegment(parent, match, begin, end);
+    }
 
     private final ScriptSegment[] children;
-    private final Symbol match;
+    private final GrammarElement match;
     private final Script parent;
     private final int begin, end;
     private Object context = NONE;
 
-    ScriptSegment(Script parent, Symbol match, int totalChildren, Deque<ScriptSegment> segments) {
+    private ScriptSegment(Script parent, GrammarElement match, Deque<ScriptSegment> segments) {
+        children = new ScriptSegment[] { segments.pop() };
+        begin = children[0].begin;
+        end = children[children.length - 1].end;
+        this.parent = parent;
+        this.match = match;
+    }
+
+    private ScriptSegment(Script parent, GrammarElement match, int totalChildren, Deque<ScriptSegment> segments) {
         children = new ScriptSegment[totalChildren];
         for (int i = totalChildren - 1; i >= 0; --i)
             children[i] = segments.pop();
@@ -30,7 +55,7 @@ public class ScriptSegment implements LocalSegment {
         this.match = match;
     }
 
-    ScriptSegment(Script parent, Symbol match, int begin, int end) {
+    private ScriptSegment(Script parent, GrammarElement match, int begin, int end) {
         this.begin = begin;
         this.end = end;
         this.parent = parent;
@@ -64,13 +89,13 @@ public class ScriptSegment implements LocalSegment {
     @Override
     public final ScriptSegment child(int at) {
         if (children == null)
-            throw new NoSuchChildException(at);
+            throw new NoSuchElementException("Attempted access of non-existent child " + at + ".");
         return children[at];
     }
 
     @Override
     public final String name() {
-        return match.name;
+        return match.name();
     }
 
     @Override
@@ -85,7 +110,7 @@ public class ScriptSegment implements LocalSegment {
 
     @Override
     public String toString() {
-        out.print("\t".repeat(tabs) + "\"" + parent.substring(begin, end) + "\" (" + match.name + ")");
+        out.print("\t".repeat(tabs) + "\"" + parent.substring(begin, end) + "\" (" + match.name() + ")");
         if (children != null) {
             out.println(" {");
             ++tabs;
